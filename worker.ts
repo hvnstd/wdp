@@ -3,8 +3,11 @@ export default {
   async fetch(req: Request, _e: Env, ctx: ExecutionContext): Promise<Response> {
     try {
       const u = new URL(req.url);
-      const viaParam = u.searchParams.has("url");
-      let t = u.searchParams.get("url") || decodeURIComponent(u.pathname.slice(1));
+      // `url` is also a legitimate upstream query parameter (Wayback CDX,
+      // save/search forms, etc.). Use it as a proxy control only on the query-mode
+      // entry point; path-mode URLs must keep their upstream query untouched.
+      const viaParam = (u.pathname === "/" || u.pathname === "") && u.searchParams.has("url");
+      let t = viaParam ? (u.searchParams.get("url") || "") : decodeURIComponent(u.pathname.slice(1));
       if (!t) return new Response("Usage: /<https://example.com> or ?url=<https://example.com>", { status: 400 });
       // Archive.org's frontend generates same-origin routes such as /details/texts
       // at runtime. Treat unqualified paths as Archive.org paths, not hostnames.
@@ -28,7 +31,7 @@ export default {
       const cache = caches.default;
       const cacheable = req.method === "GET";
       const cacheUrl = new URL(t);
-      cacheUrl.searchParams.set("__wdp_cache", "8");
+      cacheUrl.searchParams.set("__wdp_cache", "9");
       const key = new Request(cacheUrl.toString(), { method: "GET" });
       if (cacheable) {
         const hit = await cache.match(key);
