@@ -3,11 +3,15 @@ export default {
   async fetch(req: Request, _e: Env, ctx: ExecutionContext): Promise<Response> {
     try {
       const u = new URL(req.url);
+      const viaParam = u.searchParams.has("url");
       let t = u.searchParams.get("url") || decodeURIComponent(u.pathname.slice(1));
       if (!t) return new Response("Usage: /<https://example.com> or ?url=<https://example.com>", { status: 400 });
       if (!/^https?:\/\//i.test(t)) t = "https://" + t;
-      const P = u.origin;
       const target = new URL(t);
+      // Preserve upstream query parameters; only the `url` key is proxy control data.
+      for (const [k, v] of u.searchParams) if (!viaParam || k !== "url") target.searchParams.append(k, v);
+      t = target.toString();
+      const P = u.origin;
       // The Archive.org SPA routes on window.location.pathname. A path-prefixed
       // proxy URL hides its real route, so open the homepage in query mode instead.
       if (!u.searchParams.has("url") && target.hostname === "archive.org" && target.pathname === "/" && !target.search) {
@@ -17,7 +21,7 @@ export default {
       }
       const cache = caches.default;
       const cacheUrl = new URL(t);
-      cacheUrl.searchParams.set("__wdp_cache", "6");
+      cacheUrl.searchParams.set("__wdp_cache", "7");
       const key = new Request(cacheUrl.toString(), req);
       const hit = await cache.match(key);
       if (hit) return hit;
