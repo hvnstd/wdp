@@ -74,7 +74,7 @@ function rwJs(js: string, P: string, base: string): string {
   // Encoded slashes in the proxy URL are one URL path segment, so browser-relative
   // ES module imports (./chunk.js) incorrectly resolve at the proxy root. Resolve
   // those imports against the original upstream module URL before proxying them.
-  js = js.replace(/(\bfrom\s*|\bimport\s*(?:\(\s*)?)(["'])(\.{1,2}\/[^"']+)\2/g,
+  js = js.replace(/(\bfrom\s*|\bimport\s*(?:\(\s*)?)(["'`])((?:\.{1,2}\/|\/)[^"'`]+)\2/g,
     (_m, prefix: string, q: string, path: string) => prefix + q + pu(path, base, P) + q);
   return js;
 }
