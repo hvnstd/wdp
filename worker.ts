@@ -7,9 +7,17 @@ export default {
       if (!t) return new Response("Usage: /<https://example.com> or ?url=<https://example.com>", { status: 400 });
       if (!/^https?:\/\//i.test(t)) t = "https://" + t;
       const P = u.origin;
+      const target = new URL(t);
+      // The Archive.org SPA routes on window.location.pathname. A path-prefixed
+      // proxy URL hides its real route, so open the homepage in query mode instead.
+      if (!u.searchParams.has("url") && target.hostname === "archive.org" && target.pathname === "/" && !target.search) {
+        const next = new URL(P + "/");
+        next.searchParams.set("url", target.href);
+        return Response.redirect(next.toString(), 302);
+      }
       const cache = caches.default;
       const cacheUrl = new URL(t);
-      cacheUrl.searchParams.set("__wdp_cache", "5");
+      cacheUrl.searchParams.set("__wdp_cache", "6");
       const key = new Request(cacheUrl.toString(), req);
       const hit = await cache.match(key);
       if (hit) return hit;
@@ -80,6 +88,9 @@ function rwJs(js: string, P: string, base: string): string {
   // those imports against the original upstream module URL before proxying them.
   js = js.replace(/(\bfrom\s*|\bimport\s*(?:\(\s*)?)(["'`])((?:\.{1,2}\/|\/)[^"'`]+)\2/g,
     (_m, prefix: string, q: string, path: string) => prefix + q + pu(path, base, P) + q);
+  // Static assets embedded in component templates are often root-relative.
+  js = js.replace(/(["'`])\/offshoot_assets\/([^"'`]+)\1/g,
+    (_m, q: string, path: string) => q + pu("/offshoot_assets/" + path, base, P) + q);
   // Vite/Rolldown's module-preload helper converts dependency-map entries such as
   // "offshoot_assets/chunk.js" into root-relative URLs at runtime. Rewrite that
   // helper too; otherwise those generated requests escape the proxy prefix.
