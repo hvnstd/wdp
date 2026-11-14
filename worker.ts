@@ -8,7 +8,9 @@ export default {
       if (!/^https?:\/\//i.test(t)) t = "https://" + t;
       const P = u.origin;
       const cache = caches.default;
-      const key = new Request(t, req);
+      const cacheUrl = new URL(t);
+      cacheUrl.searchParams.set("__wdp_cache", "2");
+      const key = new Request(cacheUrl.toString(), req);
       const hit = await cache.match(key);
       if (hit) return hit;
       let cur = t, redir = 8, resp: Response | null = null;
@@ -30,7 +32,7 @@ export default {
       let body: BodyInit | null = resp.body;
       if (ct.includes("text/html")) { body = rwHtml(await resp.text(), cur, P); oh.set("content-type", "text/html; charset=utf-8"); }
       else if (ct.includes("text/css")) { body = rwCss(await resp.text(), cur, P); oh.set("content-type", "text/css; charset=utf-8"); }
-      else if (ct.includes("javascript") || ct.includes("application/json")) { body = rwJs(await resp.text(), P); }
+      else if (ct.includes("javascript") || ct.includes("application/json")) { body = rwJs(await resp.text(), P, cur); }
       const res = new Response(body, { status: resp.status, headers: oh });
       if (resp.status === 200) ctx.waitUntil(cache.put(key, res.clone()));
       return res;
@@ -58,7 +60,7 @@ function pu(link: string, base: string, P: string): string {
 function rwCss(css: string, base: string, P: string): string {
   return css.replace(/url\(\s*(['\"]?)(.*?)\1\s*\)/gi, (_m, q: string, x: string) => "url(" + q + pu(x.trim(), base, P) + q + ")");
 }
-function rwJs(js: string, P: string): string {
+function rwJs(js: string, P: string, base: string): string {
   for (const h of GH) {
     const re = new RegExp("https://" + h.replace(/\./g, "\\.") + "([^\\s'\"`)}]+)", "gi");
     js = js.replace(re, (m) => P + "/" + encodeURIComponent(m));
@@ -69,6 +71,11 @@ function rwJs(js: string, P: string): string {
   // Rewrite both absolute and protocol-relative Archive.org URLs, including data-node hosts.
   js = js.replace(/(?:https?:)?\/\/(?:[a-z0-9-]+\.)*archive\.org(?::\d+)?[^\s'\"`)}]*/gi,
     (m) => P + "/" + encodeURIComponent(m.startsWith("//") ? "https:" + m : m));
+  // Encoded slashes in the proxy URL are one URL path segment, so browser-relative
+  // ES module imports (./chunk.js) incorrectly resolve at the proxy root. Resolve
+  // those imports against the original upstream module URL before proxying them.
+  js = js.replace(/(\bfrom\s*|\bimport\s*(?:\(\s*)?)(["'])(\.{1,2}\/[^"']+)\2/g,
+    (_m, prefix: string, q: string, path: string) => prefix + q + pu(path, base, P) + q);
   return js;
 }
 function rwAttr(html: string, attr: string, base: string, P: string): string {
