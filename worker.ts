@@ -12,7 +12,12 @@ export default {
       // Archive.org's frontend generates same-origin routes such as /details/texts
       // at runtime. Treat unqualified paths as Archive.org paths, not hostnames.
       if (!/^https?:\/\//i.test(t)) {
-        if (t.startsWith("/")) t = "https://archive.org" + t;
+        if (t.startsWith("/")) {
+          // Same-origin Archive.org SPA routes keep their real browser pathname.
+          // Wayback's replay/CDX endpoints live on web.archive.org instead.
+          const waybackPath = /^\/(?:web\/|cdx\/|save(?:\/|\?|$)|__wb\/)/i.test(t);
+          t = (waybackPath ? "https://web.archive.org" : "https://archive.org") + t;
+        }
         else if (/^[a-z0-9.-]+\.[a-z]{2,}(?::\d+)?(?:\/|$)/i.test(t)) t = "https://" + t;
         else t = "https://archive.org/" + t;
       }
@@ -23,15 +28,21 @@ export default {
       const P = u.origin;
       // The Archive.org SPA routes on window.location.pathname. A path-prefixed
       // proxy URL hides its real route, so open the homepage in query mode instead.
-      if (!u.searchParams.has("url") && target.hostname === "archive.org" && target.pathname === "/" && !target.search) {
-        const next = new URL(P + "/");
-        next.searchParams.set("url", target.href);
-        return Response.redirect(next.toString(), 302);
+      if (!viaParam && req.method === "GET" && /text\/html/i.test(req.headers.get("Accept") || "") && target.hostname === "archive.org") {
+        // The Archive.org frontend is a client-side router. Keep its route in
+        // window.location.pathname instead of hiding it inside an encoded URL.
+        const next = new URL(P + (target.pathname === "/" ? "/" : target.pathname));
+        if (target.pathname === "/" && !target.search) next.searchParams.set("url", target.href);
+        else next.search = target.search;
+        next.hash = target.hash;
+        if (next.pathname !== u.pathname || next.search !== u.search || next.hash !== u.hash) {
+          return Response.redirect(next.toString(), 302);
+        }
       }
       const cache = caches.default;
       const cacheable = req.method === "GET";
       const cacheUrl = new URL(t);
-      cacheUrl.searchParams.set("__wdp_cache", "9");
+      cacheUrl.searchParams.set("__wdp_cache", "10");
       const key = new Request(cacheUrl.toString(), { method: "GET" });
       if (cacheable) {
         const hit = await cache.match(key);
@@ -84,9 +95,15 @@ function pu(link: string, base: string, P: string): string {
   if (!link) return link;
   if (/^(data:|javascript:|mailto:|tel:|blob:|about:|#)/i.test(link)) return link;
   if (link.startsWith(P)) return link;
-  let a: string; try { a = new URL(link, base).toString(); } catch { return link; }
-  if (!/^https?:\/\//i.test(a)) return link;
-  return P + "/" + encodeURIComponent(a);
+  let parsed: URL; try { parsed = new URL(link, base); } catch { return link; }
+  if (!/^https?:$/i.test(parsed.protocol)) return link;
+  // Same-origin URLs must remain ordinary paths so SPA routers see /search,
+  // /details/... and other real routes in window.location.pathname.
+  try {
+    const origin = new URL(base).origin;
+    if (parsed.origin === origin) return P + parsed.pathname + parsed.search + parsed.hash;
+  } catch {}
+  return P + "/" + encodeURIComponent(parsed.toString());
 }
 function rwCss(css: string, base: string, P: string): string {
   return css.replace(/url\(\s*(['\"]?)(.*?)\1\s*\)/gi, (_m, q: string, x: string) => "url(" + q + pu(x.trim(), base, P) + q + ")");
