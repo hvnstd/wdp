@@ -100,8 +100,13 @@ function pu(link: string, base: string, P: string): string {
   // Same-origin URLs must remain ordinary paths so SPA routers see /search,
   // /details/... and other real routes in window.location.pathname.
   try {
-    const origin = new URL(base).origin;
-    if (parsed.origin === origin) return P + parsed.pathname + parsed.search + parsed.hash;
+    const upstream = new URL(base);
+    // Archive.org's new frontend needs real same-origin SPA paths. Wayback
+    // replay uses its own URL grammar (/web/<timestamp>/<original-url>), so
+    // keep those URLs explicitly encoded instead of flattening them to /web/.
+    if (upstream.hostname === "archive.org" && parsed.origin === upstream.origin) {
+      return P + parsed.pathname + parsed.search + parsed.hash;
+    }
   } catch {}
   return P + "/" + encodeURIComponent(parsed.toString());
 }
