@@ -18,6 +18,7 @@ export default {
           const waybackPath = /^\/(?:web\/|cdx\/|save(?:\/|\?|$)|__wb\/)/i.test(t);
           t = (waybackPath ? "https://web.archive.org" : "https://archive.org") + t;
         }
+        else if (/^(?:web\/|cdx\/|save(?:\/|\?|$)|__wb\/)/i.test(t)) t = "https://web.archive.org/" + t;
         else if (/^[a-z0-9.-]+\.[a-z]{2,}(?::\d+)?(?:\/|$)/i.test(t)) t = "https://" + t;
         else t = "https://archive.org/" + t;
       }
@@ -29,7 +30,7 @@ export default {
       // Archive.org and Wayback both build navigation from window.location.
       // Keep their homepages at the proxy root; otherwise relative search/form
       // submissions inherit the encoded upstream URL as a bogus path prefix.
-      if (!viaParam && req.method === "GET" && /text\/html/i.test(req.headers.get("Accept") || "") && (target.hostname === "archive.org" || target.hostname === "web.archive.org")) {
+      if (!viaParam && req.method === "GET" && /text\/html/i.test(req.headers.get("Accept") || "") && target.hostname === "archive.org") {
         // Keep real upstream routes in window.location.pathname instead of
         // hiding the homepage inside an encoded URL.
         const next = new URL(P + (target.pathname === "/" ? "/" : target.pathname));
@@ -43,7 +44,7 @@ export default {
       const cache = caches.default;
       const cacheable = req.method === "GET";
       const cacheUrl = new URL(t);
-      cacheUrl.searchParams.set("__wdp_cache", "12");
+      cacheUrl.searchParams.set("__wdp_cache", "13");
       const key = new Request(cacheUrl.toString(), { method: "GET" });
       if (cacheable) {
         const hit = await cache.match(key);
