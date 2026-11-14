@@ -9,7 +9,7 @@ export default {
       const P = u.origin;
       const cache = caches.default;
       const cacheUrl = new URL(t);
-      cacheUrl.searchParams.set("__wdp_cache", "2");
+      cacheUrl.searchParams.set("__wdp_cache", "3");
       const key = new Request(cacheUrl.toString(), req);
       const hit = await cache.match(key);
       if (hit) return hit;
