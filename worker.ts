@@ -26,11 +26,12 @@ export default {
       for (const [k, v] of u.searchParams) if (!viaParam || k !== "url") target.searchParams.append(k, v);
       t = target.toString();
       const P = u.origin;
-      // The Archive.org SPA routes on window.location.pathname. A path-prefixed
-      // proxy URL hides its real route, so open the homepage in query mode instead.
-      if (!viaParam && req.method === "GET" && /text\/html/i.test(req.headers.get("Accept") || "") && target.hostname === "archive.org") {
-        // The Archive.org frontend is a client-side router. Keep its route in
-        // window.location.pathname instead of hiding it inside an encoded URL.
+      // Archive.org and Wayback both build navigation from window.location.
+      // Keep their homepages at the proxy root; otherwise relative search/form
+      // submissions inherit the encoded upstream URL as a bogus path prefix.
+      if (!viaParam && req.method === "GET" && /text\/html/i.test(req.headers.get("Accept") || "") && (target.hostname === "archive.org" || target.hostname === "web.archive.org")) {
+        // Keep real upstream routes in window.location.pathname instead of
+        // hiding the homepage inside an encoded URL.
         const next = new URL(P + (target.pathname === "/" ? "/" : target.pathname));
         if (target.pathname === "/" && !target.search) next.searchParams.set("url", target.href);
         else next.search = target.search;
@@ -42,7 +43,7 @@ export default {
       const cache = caches.default;
       const cacheable = req.method === "GET";
       const cacheUrl = new URL(t);
-      cacheUrl.searchParams.set("__wdp_cache", "11");
+      cacheUrl.searchParams.set("__wdp_cache", "12");
       const key = new Request(cacheUrl.toString(), { method: "GET" });
       if (cacheable) {
         const hit = await cache.match(key);
