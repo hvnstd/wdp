@@ -9,7 +9,7 @@ export default {
       const P = u.origin;
       const cache = caches.default;
       const cacheUrl = new URL(t);
-      cacheUrl.searchParams.set("__wdp_cache", "3");
+      cacheUrl.searchParams.set("__wdp_cache", "4");
       const key = new Request(cacheUrl.toString(), req);
       const hit = await cache.match(key);
       if (hit) return hit;
@@ -76,6 +76,11 @@ function rwJs(js: string, P: string, base: string): string {
   // those imports against the original upstream module URL before proxying them.
   js = js.replace(/(\bfrom\s*|\bimport\s*(?:\(\s*)?)(["'`])((?:\.{1,2}\/|\/)[^"'`]+)\2/g,
     (_m, prefix: string, q: string, path: string) => prefix + q + pu(path, base, P) + q);
+  // Vite/Rolldown's module-preload helper converts dependency-map entries such as
+  // "offshoot_assets/chunk.js" into root-relative URLs at runtime. Rewrite that
+  // helper too; otherwise those generated requests escape the proxy prefix.
+  js = js.replace(/(\b\w+\s*=\s*function\s*\(\s*(\w+)\s*\)\s*\{\s*return)`\/`\s*\+\s*\2\s*\}/g,
+    (_m, prefix: string, arg: string) => prefix + JSON.stringify(P + "/") + "+encodeURIComponent(new URL(\"/\"+" + arg + "," + JSON.stringify(base) + ").toString())}");
   return js;
 }
 function rwAttr(html: string, attr: string, base: string, P: string): string {
