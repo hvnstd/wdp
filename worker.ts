@@ -9,7 +9,7 @@ export default {
       const P = u.origin;
       const cache = caches.default;
       const cacheUrl = new URL(t);
-      cacheUrl.searchParams.set("__wdp_cache", "4");
+      cacheUrl.searchParams.set("__wdp_cache", "5");
       const key = new Request(cacheUrl.toString(), req);
       const hit = await cache.match(key);
       if (hit) return hit;
@@ -71,6 +71,10 @@ function rwJs(js: string, P: string, base: string): string {
   // Rewrite both absolute and protocol-relative Archive.org URLs, including data-node hosts.
   js = js.replace(/(?:https?:)?\/\/(?:[a-z0-9-]+\.)*archive\.org(?::\d+)?[^\s'\"`)}]*/gi,
     (m) => P + "/" + encodeURIComponent(m.startsWith("//") ? "https:" + m : m));
+  // Archive.org's current frontend builds API URLs from this bare-host setting
+  // (https://${VITE_PUBLIC_ARCHIVE_API_URL}). Route that API base through this proxy.
+  js = js.replace(/(VITE_PUBLIC_ARCHIVE_API_URL\s*:\s*`)archive\.org(`)/g,
+    (_m, a: string, b: string) => a + new URL(P).host + "/" + encodeURIComponent("https://archive.org") + b);
   // Encoded slashes in the proxy URL are one URL path segment, so browser-relative
   // ES module imports (./chunk.js) incorrectly resolve at the proxy root. Resolve
   // those imports against the original upstream module URL before proxying them.
