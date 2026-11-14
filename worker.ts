@@ -32,8 +32,9 @@ export default {
       if (!viaParam && req.method === "GET" && /text\/html/i.test(req.headers.get("Accept") || "") && (target.hostname === "archive.org" || target.hostname === "web.archive.org")) {
         // Keep real upstream routes in window.location.pathname instead of
         // hiding the homepage inside an encoded URL.
-        const next = new URL(P + (target.pathname === "/" ? "/" : target.pathname));
-        if (target.pathname === "/" && !target.search) next.searchParams.set("url", target.href);
+        const waybackHome = target.hostname === "web.archive.org" && target.pathname === "/";
+        const next = new URL(P + (waybackHome ? "/web/*/" : target.pathname));
+        if (target.pathname === "/" && !waybackHome && !target.search) next.searchParams.set("url", target.href);
         else next.search = target.search;
         next.hash = target.hash;
         if (next.pathname !== u.pathname || next.search !== u.search || next.hash !== u.hash) {
