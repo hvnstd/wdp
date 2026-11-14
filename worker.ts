@@ -6,7 +6,13 @@ export default {
       const viaParam = u.searchParams.has("url");
       let t = u.searchParams.get("url") || decodeURIComponent(u.pathname.slice(1));
       if (!t) return new Response("Usage: /<https://example.com> or ?url=<https://example.com>", { status: 400 });
-      if (!/^https?:\/\//i.test(t)) t = "https://" + t;
+      // Archive.org's frontend generates same-origin routes such as /details/texts
+      // at runtime. Treat unqualified paths as Archive.org paths, not hostnames.
+      if (!/^https?:\/\//i.test(t)) {
+        if (t.startsWith("/")) t = "https://archive.org" + t;
+        else if (/^[a-z0-9.-]+\.[a-z]{2,}(?::\d+)?(?:\/|$)/i.test(t)) t = "https://" + t;
+        else t = "https://archive.org/" + t;
+      }
       const target = new URL(t);
       // Preserve upstream query parameters; only the `url` key is proxy control data.
       for (const [k, v] of u.searchParams) if (!viaParam || k !== "url") target.searchParams.append(k, v);
@@ -20,18 +26,25 @@ export default {
         return Response.redirect(next.toString(), 302);
       }
       const cache = caches.default;
+      const cacheable = req.method === "GET";
       const cacheUrl = new URL(t);
-      cacheUrl.searchParams.set("__wdp_cache", "7");
-      const key = new Request(cacheUrl.toString(), req);
-      const hit = await cache.match(key);
-      if (hit) return hit;
-      let cur = t, redir = 8, resp: Response | null = null;
+      cacheUrl.searchParams.set("__wdp_cache", "8");
+      const key = new Request(cacheUrl.toString(), { method: "GET" });
+      if (cacheable) {
+        const hit = await cache.match(key);
+        if (hit) return hit;
+      }
+      let cur = t, method = req.method, redir = 8, resp: Response | null = null;
+      const payload = method === "GET" || method === "HEAD" ? undefined : await req.arrayBuffer();
       while (redir-- > 0) {
-        resp = await fetch(cur, { method: "GET", redirect: "manual", headers: hdrs(req, cur) });
+        const init: RequestInit = { method, redirect: "manual", headers: hdrs(req, cur) };
+        if (payload && method !== "GET" && method !== "HEAD") init.body = payload;
+        resp = await fetch(cur, init);
         if (resp.status >= 300 && resp.status < 400) {
           const loc = resp.headers.get("Location");
           if (!loc) break;
           cur = new URL(loc, cur).toString();
+          if (resp.status === 303 || ((resp.status === 301 || resp.status === 302) && method === "POST")) method = "GET";
           continue;
         }
         break;
@@ -46,7 +59,7 @@ export default {
       else if (ct.includes("text/css")) { body = rwCss(await resp.text(), cur, P); oh.set("content-type", "text/css; charset=utf-8"); }
       else if (ct.includes("javascript") || ct.includes("application/json")) { body = rwJs(await resp.text(), P, cur); }
       const res = new Response(body, { status: resp.status, headers: oh });
-      if (resp.status === 200) ctx.waitUntil(cache.put(key, res.clone()));
+      if (cacheable && resp.status === 200) ctx.waitUntil(cache.put(key, res.clone()));
       return res;
     } catch (e) { return new Response("Error: " + (e as Error).message, { status: 500 }); }
   },
@@ -55,7 +68,10 @@ const GH = ["github.com","api.github.com","objects.githubusercontent.com","raw.g
 function hdrs(req: Request, tu: string): Headers {
   const h = new Headers();
   h.set("User-Agent", req.headers.get("User-Agent") || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36");
-  h.set("Accept", "*/*");
+  h.set("Accept", req.headers.get("Accept") || "*/*");
+  for (const name of ["Content-Type", "Accept-Language", "Authorization", "Origin"]) {
+    const value = req.headers.get(name); if (value) h.set(name, value);
+  }
   const c = req.headers.get("Cookie"); if (c) h.set("Cookie", c);
   const r = req.headers.get("Range"); if (r) h.set("Range", r);
   try { h.set("Referer", new URL(tu).origin); } catch {}
