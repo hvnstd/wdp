@@ -42,7 +42,7 @@ export default {
       const cache = caches.default;
       const cacheable = req.method === "GET";
       const cacheUrl = new URL(t);
-      cacheUrl.searchParams.set("__wdp_cache", "10");
+      cacheUrl.searchParams.set("__wdp_cache", "11");
       const key = new Request(cacheUrl.toString(), { method: "GET" });
       if (cacheable) {
         const hit = await cache.match(key);
