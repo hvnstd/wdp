@@ -65,8 +65,10 @@ function rwJs(js: string, P: string): string {
   }
   // Archive.org uses many changing data-node subdomains (ia*.us.archive.org,
   // dn*.ca.archive.org, etc.); match the whole archive.org namespace.
-  js = js.replace(/https?:\/\/(?:[a-z0-9-]+\.)*archive\.org(?::\d+)?[^\s'\"`)}]*/gi,
-    (m) => P + "/" + encodeURIComponent(m));
+  // The homepage bootstraps Apollo with a protocol-relative URL (//apollo.archive.org).
+  // Rewrite both absolute and protocol-relative Archive.org URLs, including data-node hosts.
+  js = js.replace(/(?:https?:)?\/\/(?:[a-z0-9-]+\.)*archive\.org(?::\d+)?[^\s'\"`)}]*/gi,
+    (m) => P + "/" + encodeURIComponent(m.startsWith("//") ? "https:" + m : m));
   return js;
 }
 function rwAttr(html: string, attr: string, base: string, P: string): string {
